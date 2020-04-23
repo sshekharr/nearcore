@@ -30,7 +30,7 @@ use near_primitives::views::{
     ExecutionOutcomeWithIdView, ExecutionStatusView, FinalExecutionOutcomeView,
     FinalExecutionStatus, LightClientBlockView,
 };
-use near_store::{ColStateHeaders, ColStateParts, Trie};
+use near_store::{ColStateHeaders, ColStateNumParts, ColStateParts, Trie};
 
 use crate::error::{Error, ErrorKind};
 use crate::finality::{ApprovalVerificationError, FinalityGadget, FinalityGadgetQuorums};
@@ -1346,6 +1346,13 @@ impl Chain {
         shard_id: ShardId,
         sync_hash: CryptoHash,
     ) -> Result<ShardStateSyncResponseHeader, Error> {
+        // Check cache
+        let key = StateHeaderKey(shard_id, sync_hash).try_to_vec()?;
+        match self.store.owned_store().get_ser(ColStateHeaders, &key) {
+            Ok(Some(header)) => return Ok(header),
+            _ => {}
+        }
+
         // Consistency rules:
         // 1. Everything prefixed with `sync_` indicates new epoch, for which we are syncing.
         // 1a. `sync_prev` means the last of the prev epoch.
@@ -1479,7 +1486,7 @@ impl Chain {
         let state_root_node =
             self.runtime_adapter.get_state_root_node(&chunk_header.inner.prev_state_root);
 
-        Ok(ShardStateSyncResponseHeader {
+        let shard_state_header = ShardStateSyncResponseHeader {
             chunk,
             chunk_proof,
             prev_chunk_header,
@@ -1487,7 +1494,14 @@ impl Chain {
             incoming_receipts_proofs,
             root_proofs,
             state_root_node,
-        })
+        };
+
+        // Saving the header data
+        let mut store_update = self.store.owned_store().store_update();
+        store_update.set_ser(ColStateHeaders, &key, &shard_state_header)?;
+        store_update.commit()?;
+
+        Ok(shard_state_header)
     }
 
     pub fn get_num_state_parts(memory_usage: u64) -> u64 {
@@ -1504,6 +1518,13 @@ impl Chain {
         part_id: u64,
         sync_hash: CryptoHash,
     ) -> Result<Vec<u8>, Error> {
+        // Check cache
+        let key = StatePartKey(sync_hash, shard_id, part_id).try_to_vec()?;
+        match self.store.owned_store().get_ser(ColStateParts, &key) {
+            Ok(Some(state_part)) => return Ok(state_part),
+            _ => {}
+        }
+
         let sync_block =
             self.get_block(&sync_hash).expect("block has already been checked for existence");
         let sync_block_header = sync_block.header.clone();
@@ -1529,6 +1550,12 @@ impl Chain {
             return Err(ErrorKind::InvalidStateRequest("part_id out of bound".to_string()).into());
         }
         let state_part = self.runtime_adapter.obtain_state_part(&state_root, part_id, num_parts);
+
+        // Saving the part data
+        let mut store_update = self.store.owned_store().store_update();
+        store_update.set_ser(ColStateParts, &key, &state_part)?;
+        store_update.set_ser(ColStateNumParts, sync_hash.as_ref(), &num_parts)?;
+        store_update.commit()?;
 
         Ok(state_part)
     }

@@ -82,10 +82,11 @@ pub enum DBCol {
     ColStateChanges = 36,
     ColBlockRefCount = 37,
     ColTrieChanges = 38,
+    ColStateNumParts = 39,
 }
 
 // Do not move this line from enum DBCol
-const NUM_COLS: usize = 39;
+const NUM_COLS: usize = 40;
 
 impl std::fmt::Display for DBCol {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
@@ -129,6 +130,7 @@ impl std::fmt::Display for DBCol {
             Self::ColStateChanges => "key value changes",
             Self::ColBlockRefCount => "refcount per block",
             Self::ColTrieChanges => "trie changes",
+            Self::ColStateNumParts => "number of state parts",
         };
         write!(formatter, "{}", desc)
     }
