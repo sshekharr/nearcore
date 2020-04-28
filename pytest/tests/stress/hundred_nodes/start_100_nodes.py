@@ -61,7 +61,7 @@ genesis_config_changes = [
   ["epoch_length", 1000]
 ]
 
-num_machines = 20
+num_machines = 100
 
 # machine 0-(k-1) run docker, machine k-100 run binary
 num_docker_machines = 0
@@ -225,7 +225,7 @@ def upload_genesis_files(i):
     machines[i].kill_detach_tmux()
     machines[i].run('rm -rf ~/.near')
     # upload keys, config, genesis
-    machines[i].upload(f'/tmp/near/node{i}', f'/home/{machines[i].username}/.near')
+    machines[i].upload(f'/tmp/near/node{i}/', f'/home/{machines[i].username}/.near')
     pbar.update(1)
 
 pmap(upload_genesis_files, range(num_machines))
@@ -241,7 +241,7 @@ docker run -d -u $UID:$UID -v /home/{m.username}/.near:/srv/near \
 ''')
     else:
         m.run_detach_tmux(
-            'cd nearcore && export RUST_LOG=diagnostic=trace && target/release/near run --archive')
+            'cd nearcore && export RUST_BACKTRACE=1 && target/release/near run --archive')
     pbar.update(1)
 
 pmap(start_nearcore, range(len(machines)))
