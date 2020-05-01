@@ -686,6 +686,7 @@ impl RuntimeAdapter for KeyValueRuntime {
                 TrieChanges::empty(state_root),
                 Default::default(),
                 block_hash.clone(),
+                shard_id,
             ),
             new_root: state_root,
             outcomes: tx_results,

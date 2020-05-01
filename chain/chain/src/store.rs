@@ -25,7 +25,7 @@ use near_primitives::types::{
     AccountId, BlockExtra, BlockHeight, ChunkExtra, EpochId, ShardId, StateChanges,
     StateChangesExt, StateChangesKinds, StateChangesKindsExt, StateChangesRequest, StateHeaderKey,
 };
-use near_primitives::utils::{index_to_bytes, to_timestamp};
+use near_primitives::utils::{get_block_shard_id, index_to_bytes, to_timestamp};
 use near_primitives::views::LightClientBlockView;
 use near_store::{
     read_with_cache, ColBlock, ColBlockExtra, ColBlockHeader, ColBlockHeight, ColBlockMisc,
@@ -60,13 +60,6 @@ pub enum GCMode {
     Fork(Arc<Trie>),
     Canonical(Arc<Trie>),
     StateSync,
-}
-
-fn get_block_shard_id(block_hash: &CryptoHash, shard_id: ShardId) -> Vec<u8> {
-    let mut res = Vec::with_capacity(40);
-    res.extend_from_slice(block_hash.as_ref());
-    res.extend_from_slice(&shard_id.to_le_bytes());
-    res
 }
 
 fn get_height_shard_id(height: BlockHeight, shard_id: ShardId) -> Vec<u8> {
@@ -1754,25 +1747,29 @@ impl<'a> ChainStoreUpdate<'a> {
         match gc_mode.clone() {
             GCMode::Fork(trie) => {
                 // If the block is on a fork, we delete the state that's the result of applying this block
-                self.store()
-                    .get_ser(ColTrieChanges, block_hash.as_ref())?
-                    .map(|trie_changes: TrieChanges| {
-                        trie_changes
-                            .revert_insertions_into(trie.clone(), &mut store_update)
-                            .map_err(|err| ErrorKind::Other(err.to_string()))
-                    })
-                    .unwrap_or(Ok(()))?;
+                for shard_id in 0..header.inner_rest.chunk_mask.len() as ShardId {
+                    self.store()
+                        .get_ser(ColTrieChanges, &get_block_shard_id(&block_hash, shard_id))?
+                        .map(|trie_changes: TrieChanges| {
+                            trie_changes
+                                .revert_insertions_into(trie.clone(), &mut store_update)
+                                .map_err(|err| ErrorKind::Other(err.to_string()))
+                        })
+                        .unwrap_or(Ok(()))?;
+                }
             }
             GCMode::Canonical(trie) => {
                 // If the block is on canonical chain, we delete the state that's before applying this block
-                self.store()
-                    .get_ser(ColTrieChanges, block_hash.as_ref())?
-                    .map(|trie_changes: TrieChanges| {
-                        trie_changes
-                            .deletions_into(trie.clone(), &mut store_update)
-                            .map_err(|err| ErrorKind::Other(err.to_string()))
-                    })
-                    .unwrap_or(Ok(()))?;
+                for shard_id in 0..header.inner_rest.chunk_mask.len() as ShardId {
+                    self.store()
+                        .get_ser(ColTrieChanges, &get_block_shard_id(&block_hash, shard_id))?
+                        .map(|trie_changes: TrieChanges| {
+                            trie_changes
+                                .deletions_into(trie.clone(), &mut store_update)
+                                .map_err(|err| ErrorKind::Other(err.to_string()))
+                        })
+                        .unwrap_or(Ok(()))?;
+                }
                 // Set `block_hash` on previous one
                 block_hash = self.get_block_header(&block_hash)?.prev_hash;
             }

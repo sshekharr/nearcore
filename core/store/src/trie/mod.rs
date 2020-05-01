@@ -14,8 +14,9 @@ use near_primitives::challenge::PartialState;
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{
-    RawStateChange, RawStateChangesWithTrieKey, StateChangeCause, StateRoot, StateRootNode,
+    RawStateChange, RawStateChangesWithTrieKey, ShardId, StateChangeCause, StateRoot, StateRootNode,
 };
+use near_primitives::utils::get_block_shard_id;
 
 use crate::db::{DBCol, DBOp, DBTransaction};
 use crate::trie::insert_delete::NodesStorage;
@@ -552,6 +553,7 @@ pub struct WrappedTrieChanges {
     trie_changes: TrieChanges,
     state_changes: Vec<RawStateChangesWithTrieKey>,
     block_hash: CryptoHash,
+    shard_id: ShardId,
 }
 
 impl WrappedTrieChanges {
@@ -560,8 +562,9 @@ impl WrappedTrieChanges {
         trie_changes: TrieChanges,
         state_changes: Vec<RawStateChangesWithTrieKey>,
         block_hash: CryptoHash,
+        shard_id: ShardId,
     ) -> Self {
-        WrappedTrieChanges { trie, trie_changes, state_changes, block_hash }
+        WrappedTrieChanges { trie, trie_changes, state_changes, block_hash, shard_id }
     }
 
     pub fn insertions_into(
@@ -623,7 +626,11 @@ impl WrappedTrieChanges {
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.insertions_into(&mut store_update)?;
         self.state_changes_into(&mut store_update)?;
-        store_update.set_ser(ColTrieChanges, self.block_hash.as_ref(), &self.trie_changes)?;
+        store_update.set_ser(
+            ColTrieChanges,
+            &get_block_shard_id(&self.block_hash, self.shard_id),
+            &self.trie_changes,
+        )?;
         Ok(())
     }
 }

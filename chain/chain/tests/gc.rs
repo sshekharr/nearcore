@@ -78,6 +78,7 @@ mod tests {
                 trie_changes,
                 Default::default(),
                 block.hash(),
+                0,
             );
             store_update.save_trie_changes(wrapped_trie_changes);
             store_update.commit().unwrap();

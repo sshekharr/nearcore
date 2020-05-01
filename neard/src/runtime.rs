@@ -344,6 +344,7 @@ impl NightshadeRuntime {
                 apply_result.trie_changes,
                 apply_result.state_changes,
                 block_hash.clone(),
+                shard_id,
             ),
             new_root: apply_result.state_root,
             outcomes: apply_result.outcomes,
